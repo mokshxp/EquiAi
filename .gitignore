@@ -1,0 +1,23 @@
+# Environments
+.venv/
+venv/
+env/
+.env
+
+# Dependencies
+node_modules/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
