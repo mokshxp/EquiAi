@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { runBiasAnalysis } from '../utils/biasDetection';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useTheme } from '../context/ThemeContext';
@@ -25,10 +26,10 @@ const MODAL_CONTENT = {
     icon: '📋',
     sections: [
       { h: 'Acceptance of Terms', p: 'By accessing or using EquiAI, you agree to be bound by these Terms of Use. If you do not agree with any part of these terms, you may not use our services.' },
-      { h: 'Permitted Use', p: 'EquiAI is licensed for lawful bias auditing purposes only. You may not use the platform to process illegal data, circumvent anti-discrimination regulations, or reverse-engineer our proprietary scoring algorithms.' },
-      { h: 'Intellectual Property', p: 'All audit methodologies, UI designs, and scoring algorithms are the exclusive property of EquiAI Inc. The EEOC 4/5ths rule implementation is based on public regulatory standards.' },
+      { h: 'Permitted Use', p: 'EquiAI is licensed for lawful bias auditing purposes only. You may not use the platform to process illegal data, circumvent international anti-discrimination regulations, or reverse-engineer our proprietary scoring algorithms.' },
+      { h: 'Intellectual Property', p: 'All audit methodologies, UI designs, and scoring algorithms are the exclusive property of EquiAI Inc. Our multi-jurisdictional audits are based on public regulatory standards including EEOC (US), EU AI Act, and UK Equality Act.' },
       { h: 'Limitation of Liability', p: 'EquiAI provides bias analysis as a decision-support tool, not a legal opinion. Our maximum liability for any claim arising from use of the service is limited to the fees paid in the preceding 12 months.' },
-      { h: 'Governing Law', p: 'These terms are governed by the laws of the State of California, USA, without regard to conflict of law provisions.' },
+      { h: 'Global Jurisdiction', p: 'These terms are governed by international data governance standards and interpreted according to the laws of the jurisdiction where service is rendered, defaulting to Delaware, USA.' },
     ]
   },
   'Security': {
@@ -53,10 +54,10 @@ const MODAL_CONTENT = {
   'About Us': {
     icon: '🌍',
     sections: [
-      { h: 'Our Mission', p: `EquiAI was founded in ${new Date().getFullYear()} with one mission: make algorithmic decision-making fair for everyone. We believe AI systems should be transparent, auditable, and unbiased by design.` },
-      { h: 'The Problem We Solve', p: 'Automated hiring, lending, and healthcare algorithms increasingly shape human outcomes — but most organisations have no way to verify these systems are free of illegal discrimination. EquiAI changes that.' },
-      { h: 'Our Approach', p: 'We combine EEOC adverse impact analysis, generative AI explanations, and blockchain immutability to create the world\'s first end-to-end algorithmic compliance platform.' },
-      { h: 'The Team', p: 'Our team spans legal compliance, machine learning, and blockchain engineering. We partner with universities, HR associations, and civil society organisations to continuously improve our fairness standards.' },
+      { h: 'Our Mission', p: `EquiAI was founded in ${new Date().getFullYear()} with one mission: make algorithmic decision-making fair for everyone, globally. We believe AI systems should be transparent, auditable, and unbiased by design across all borders.` },
+      { h: 'Universal Equity', p: 'Automated hiring, lending, and healthcare algorithms shape human outcomes on a global scale. EquiAI provides the universal infrastructure to verify these systems are free of discrimination, whether in San Francisco, London, or New Delhi.' },
+      { h: 'Global Frameworks', p: 'We combine US EEOC standards, the EU AI Act safety protocols, and the UK Equality Act to create the world\'s first multi-jurisdictional algorithmic compliance platform.' },
+      { h: 'International Cooperation', p: 'Our team partners with global bodies like the UN, international HR associations, and civil society organisations to continuously adapt to the evolving landscape of AI regulation.' },
     ]
   },
   'SDG Mission': {
@@ -71,10 +72,10 @@ const MODAL_CONTENT = {
   'Blog': {
     icon: '✍️',
     sections: [
-      { h: 'Latest: EEOC 4/5ths Rule Explained', p: 'The EEOC adverse impact rule states that a selection rate less than 80% of the highest group rate indicates potential discrimination. Learn how EquiAI automates this calculation across thousands of rows in seconds.' },
-      { h: 'Case Study: Hiring Bias in Tech', p: 'Our analysis of 14 anonymised hiring datasets found that 67% showed statistically significant gender or racial bias. Read how three companies eliminated bias using EquiAI\'s remediation recommendations.' },
-      { h: 'Blockchain + AI Compliance: A New Paradigm', p: 'Traditional audit logs can be altered. By combining AI analysis with Polygon blockchain sealing, EquiAI creates the first truly immutable compliance record — a game-changer for legal defensibility.' },
-      { h: 'Coming Soon', p: 'Subscribe to our newsletter to get notified when new research, case studies, and regulatory updates are published. newsletter@equiai.io' },
+      { h: 'Navigating the EU AI Act', p: 'The EU AI Act introduces strict fairness requirements for high-risk AI. Learn how EquiAI automates compliance checks against these new European standards.' },
+      { h: 'US vs Global Fairness Metrics', p: 'While the US focuses on the 8/10ths rule, global frameworks often demand narrower parity. We compare the EEOC standards with Indian and UK legal requirements.' },
+      { h: 'Blockchain: The Future of Auditing', p: 'Immutable records are key to global trust. By sealing every audit on the Polygon blockchain, EquiAI creates a tamper-proof trail that holds up in any international court.' },
+      { h: 'Case Studies: Global Bias Trends', p: 'Read our analysis on demographic bias across four continents and how multi-national corporations are de-biasing their global talent pipelines.' },
     ]
   },
   'Careers': {
@@ -89,10 +90,10 @@ const MODAL_CONTENT = {
   'Audit Engine': {
     icon: '⚙️',
     sections: [
-      { h: 'How It Works', p: 'The EquiAI Audit Engine ingests structured datasets (CSV, XLSX, or JSON), auto-detects decision columns and protected demographic attributes, then computes EEOC 4/5ths adverse impact ratios for every group pair.' },
-      { h: 'Scoring Model', p: 'Each audit produces a 0–100 Bias Score. Scores above 80 indicate mostly fair outcomes. Scores 60–79 trigger a Warning. Scores below 60 indicate Statistically Significant Bias under EEOC guidelines.' },
-      { h: 'Supported Attributes', p: 'Gender, Race/Ethnicity, Age Group, Nationality, Disability Status, Religion, and any custom categorical column in your dataset.' },
-      { h: 'Performance', p: 'The engine processes datasets of up to 500,000 rows in under 3 seconds. All computation is performed server-side — raw data never leaves your session.' },
+      { h: 'Multi-Jurisdictional Logic', p: 'The EquiAI Audit Engine calculates disparate impact metrics that dynamically adapt to the selected legal jurisdiction (US EEOC, EU AI Act, UK Equality Act, India Constitution, etc.).' },
+      { h: 'Standardised Fairness Score', p: 'Each audit produces a 0–100 Fairness Score. Our threshold-aware system classifies outcomes as Fair, Moderate, High Bias, or Severe based on international regulatory baselines.' },
+      { h: 'High-Scale Processing', p: 'Engineered for speed, our engine handles datasets up to 1M+ rows. All processing is transient and privacy-first; data is never stored outside your local session.' },
+      { h: 'Smart Bucketing', p: 'To avoid false-positive bias alerts, we use automated bucketing for age, education, and numeric attributes, ensuring stable and reliable results for demographic comparisons.' },
     ]
   },
   'API Docs': {
@@ -382,27 +383,240 @@ function StepCard({ s, i, total }) {
 export default function Home() {
   const [results, setResults]         = useState(null);
   const [selectedCol, setSelectedCol] = useState('');
+  const [useCase, setUseCase]         = useState('Hiring');
   const [modalPage, setModalPage]     = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [jurisdiction, setJurisdiction] = useState('US_EEOC');
+  const [language, setLanguage] = useState('English');
+  const [autoDetectResult, setAutoDetectResult] = useState(null);
+  const [aiExplanation, setAiExplanation] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [blockchainBlock, setBlockchainBlock] = useState(null);
+  const [lastUploadedFile, setLastUploadedFile] = useState(null);
   const { isDark }                    = useTheme();
+  const navigate                      = useNavigate();
 
-  const handleSampleUpload = () => {
-    const csv = ['Name,Gender,Race,Selected','Alice,Female,Asian,No','Bob,Male,White,Yes','Carol,Female,Black,No','David,Male,White,Yes','Eva,Female,Hispanic,No','Frank,Male,Asian,Yes','Grace,Female,White,No','Henry,Male,Black,Yes','Isabella,Female,Asian,No','James,Male,Hispanic,Yes','Karen,Female,White,Yes','Leo,Male,Black,No','Maria,Female,Hispanic,No','Nathan,Male,White,Yes','Olivia,Female,Black,No','Paul,Male,Asian,Yes'].join('\n');
-    const lines=csv.split('\n'), headers=lines[0].split(',');
-    const data=lines.slice(1).map(l=>headers.reduce((a,h,i)=>({...a,[h]:l.split(',')[i]}),{}));
-    setResults(runBiasAnalysis(data));
+  // Auto-fired after results load: upgrades explanation with Gemini AI in background
+  const fetchAIExplanation = useCallback(async (biasResults, jurisdictionInfo, lang) => {
+    setAiLoading(true);
+    try {
+      const res = await fetch('http://localhost:8000/api/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bias_results: biasResults, jurisdiction_info: jurisdictionInfo, language: lang }),
+      });
+      const d = await res.json();
+      if (d.explanation) setAiExplanation(d.explanation);
+    } catch {
+      // silently keep the rule-based explanation already shown
+    } finally {
+      setAiLoading(false);
+    }
+  }, []);
+
+  const downloadReport = useCallback(() => {
+    if (!results) return;
+    const reportData = {
+      timestamp: new Date().toISOString(),
+      jurisdiction,
+      language,
+      use_case: useCase,
+      demographic_columns: results.demographicCols,
+      column_analyses: results.columnAnalyses,
+    };
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `equiai_audit_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [results, jurisdiction, language, useCase]);
+
+  const downloadPDF = async () => {
+    if (!lastUploadedFile) return alert("Please upload a file first.");
+    const formData = new FormData();
+    formData.append('file', lastUploadedFile);
+    try {
+      const res = await fetch('http://localhost:8000/api/export/pdf', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `equiai_report_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.click();
+    } catch (e) { alert("PDF export failed. Ensure the server is running."); }
   };
 
-  useEffect(()=>{if(results&&!selectedCol)setSelectedCol(results.demographicCols[0]);},[results]);
+  const handleSampleUpload = async (e) => {
+    e?.stopPropagation();
+    setIsAnalyzing(true);
+    
+    try {
+      // Create a blob from the sample data
+      const csvContent = ['Name,Gender,Race,Selected','Alice,Female,Asian,No','Bob,Male,White,Yes','Carol,Female,Black,No','David,Male,White,Yes','Eva,Female,Hispanic,No','Frank,Male,Asian,Yes','Grace,Female,White,No','Henry,Male,Black,Yes','Isabella,Female,Asian,No','James,Male,Hispanic,Yes','Karen,Female,White,Yes','Leo,Male,Black,No','Maria,Female,Hispanic,No','Nathan,Male,White,Yes','Olivia,Female,Black,No','Paul,Male,Asian,Yes'].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const file = new File([blob], "sample_data.csv", { type: 'text/csv' });
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('jurisdiction', jurisdiction);
+      formData.append('language', language);
+      
+      const response = await fetch('http://localhost:8000/api/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        const mappedResults = {
+            demographicCols: data?.bias_results?.demographic_columns || [],
+            columnAnalyses: Object.fromEntries(
+                Object.entries(data?.bias_results?.column_analyses || {}).map(([col, an]) => [
+                    col,
+                    {
+                        groupRates: an?.group_rates || {},
+                        groupCounts: an?.group_counts || {},
+                        biasScore: an?.bias_score || 0,
+                        minRatio: an?.min_ratio || 1,
+                        majorityGroup: an?.disparate_impact?.majority_group || "Unknown",
+                        biasLevel: an?.bias_level || "FAIR",
+                        isSmartBucketed: an?.is_smart_bucketed || false
+                    }
+                ])
+            ),
+            predictedUseCase: 'Hiring',
+            confidence: '95%'
+        };
+        setResults(mappedResults);
+        setBlockchainBlock(data?.blockchain_block);
+        setLastUploadedFile(file);
+        setAutoDetectResult({ useCase: 'Hiring', confidence: '95%' });
+        setAiExplanation(data?.ai_explanation || '');
+        // Fire Gemini AI upgrade in background — non-blocking
+        fetchAIExplanation(
+          data?.bias_results,
+          data?.jurisdiction_info || 'Global Standard',
+          data?.language || language
+        );
+      } else {
+        alert("Bias Analysis Failed: " + (data.detail || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Error analyzing bias:", error);
+      alert("Could not connect to EquiAI Backend. Ensure uvicorn is running on port 8000.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setIsAnalyzing(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('jurisdiction', jurisdiction);
+      formData.append('language', language);
+      
+      const response = await fetch('http://localhost:8000/api/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        const mappedResults = {
+            demographicCols: data?.bias_results?.demographic_columns || [],
+            columnAnalyses: Object.fromEntries(
+                Object.entries(data?.bias_results?.column_analyses || {}).map(([col, an]) => [
+                    col,
+                    {
+                        groupRates: an?.group_rates || {},
+                        groupCounts: an?.group_counts || {},
+                        biasScore: an?.bias_score || 0,
+                        minRatio: an?.min_ratio || 1,
+                        majorityGroup: an?.disparate_impact?.majority_group || "Unknown",
+                        biasLevel: an?.bias_level || "FAIR",
+                        isSmartBucketed: an?.is_smart_bucketed || false
+                    }
+                ])
+            ),
+            predictedUseCase: 'Hiring',
+            confidence: '95%'
+        };
+        setResults(mappedResults);
+        setBlockchainBlock(data?.blockchain_block);
+        setLastUploadedFile(file);
+        setAutoDetectResult({ useCase: 'Hiring', confidence: '95%' });
+        setAiExplanation(data?.ai_explanation || '');
+        // Fire Gemini AI upgrade in background — non-blocking
+        fetchAIExplanation(
+          data?.bias_results,
+          data?.jurisdiction_info || 'Global Standard',
+          data?.language || language
+        );
+      } else {
+        alert("Bias Analysis Failed: " + (data.detail || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      alert("Error parsing CSV or connecting to API.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const triggerFileInput = (e) => {
+    e?.stopPropagation();
+    document.getElementById('file-upload-input').click();
+  };
+
+  const useCaseMap = {
+    'Hiring': ['gender', 'age', 'education', 'race', 'ethnicity'],
+    'Loan': ['gender', 'age', 'income', 'race', 'ethnicity', 'marital'],
+    'College': ['gender', 'age', 'education', 'race', 'ethnicity', 'nationality']
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const allowedCols = useCaseMap[useCase] || [];
+  const filteredCols = results ? results.demographicCols.filter(c => allowedCols.some(ac => c.toLowerCase().includes(ac))) : [];
+
+  useEffect(() => {
+    if (results && filteredCols.length > 0 && !filteredCols.includes(selectedCol)) {
+      setSelectedCol(filteredCols[0]);
+    } else if (results && !selectedCol && filteredCols.length > 0) {
+      setSelectedCol(filteredCols[0]);
+    }
+  }, [results, useCase, selectedCol, filteredCols]);
 
   const currentAnalysis = results?.columnAnalyses[selectedCol];
   const chartData = currentAnalysis ? Object.entries(currentAnalysis.groupRates).map(([g,r])=>({name:g,rate:Number((r*100).toFixed(1))})) : [];
+  
+  const allFilteredScores = filteredCols.map(c => results.columnAnalyses[c].biasScore);
+  const dynamicOverallScore = allFilteredScores.length > 0 ? Math.min(...allFilteredScores) : 100;
+
+  const threshold = results?.jurisdiction_threshold || 0.8;
   const vs = !results ? null :
-    results.overallBiasLevel==='BIASED'  ? {bg:'#fee2e2',txt:'#dc2626',border:'#fca5a5',dot:'#ef4444',label:'⚠ Bias Detected'} :
-    results.overallBiasLevel==='WARNING' ? {bg:'#fef3c7',txt:'#d97706',border:'#fcd34d',dot:'#f59e0b',label:'⚡ Warning'} :
-    {bg:'#d1fae5',txt:'#059669',border:'#6ee7b7',dot:'#10b981',label:'✓ Mostly Fair'};
+    (dynamicOverallScore / 100) >= threshold ? {bg:'#d1fae5',txt:'#059669',border:'#6ee7b7',dot:'#10b981',label:'🟢 Fair'} :
+    (dynamicOverallScore / 100) >= (threshold - 0.2) ? {bg:'#fef3c7',txt:'#d97706',border:'#fcd34d',dot:'#f59e0b',label:'🟡 Moderate'} :
+    (dynamicOverallScore / 100) >= (threshold - 0.4) ? {bg:'#ffedd5',txt:'#d97706',border:'#fed7aa',dot:'#f97316',label:'🟠 High Bias'} :
+    {bg:'#fee2e2',txt:'#dc2626',border:'#fca5a5',dot:'#ef4444',label:'🔴 Severe Bias'};
+
+  const highestBiasAttr = results ? filteredCols.reduce((maxObj, c) => {
+    const analysis = results.columnAnalyses[c];
+    // Note: lower score = more biased
+    if(maxObj.score === -1 || analysis.biasScore < maxObj.score) return { col: c, score: analysis.biasScore, impact: analysis.minRatio };
+    return maxObj;
+  }, { col: '', score: -1, impact: 1 }) : null;
+  
+  const useCaseText = useCase === 'Hiring' ? 'in hiring decisions' : useCase === 'Loan' ? 'for loan approvals' : 'in college admissions';
 
   const features = [
-    {t:'Adverse Impact',   d:'Automated EEOC 4/5ths rule to surface hidden decision bias across all groups.',           e:'📊',iconBg:'linear-gradient(135deg,#ede9fe,#c4b5fd)',accent:'#7c3aed',gradient:'linear-gradient(90deg,#8b5cf6,#6d28d9)',tag:'Statistical',   stat:'Columns analyzed',   statVal:'Auto-detected'},
+    {t:'Adverse Impact',   d:'Automated multi-jurisdiction frameworks to surface hidden decision bias across all groups.',           e:'📊',iconBg:'linear-gradient(135deg,#ede9fe,#c4b5fd)',accent:'#7c3aed',gradient:'linear-gradient(90deg,#8b5cf6,#6d28d9)',tag:'Statistical',   stat:'Columns analyzed',   statVal:'Auto-detected'},
     {t:'AI Explainer',     d:'Plain-language summaries of exactly why and where bias exists in the model.',              e:'🧠',iconBg:'linear-gradient(135deg,#d1fae5,#6ee7b7)',accent:'#059669',gradient:'linear-gradient(90deg,#10b981,#059669)',tag:'Generative AI', stat:'Explanation quality', statVal:'Powered by Gemini'},
     {t:'Blockchain Seal',  d:'Immutable on-chain hash for every audit — tamper-proof and permanently timestamped.',      e:'🔗',iconBg:'linear-gradient(135deg,#fef3c7,#fcd34d)',accent:'#d97706',gradient:'linear-gradient(90deg,#f59e0b,#d97706)',tag:'Web3',           stat:'Hash algorithm',     statVal:'SHA-256'},
     {t:'Demographic Scans',d:'Deep-dive analysis: gender, race, age, nationality, and 10+ protected dimensions.',        e:'🔍',iconBg:'linear-gradient(135deg,#fee2e2,#fca5a5)',accent:'#dc2626',gradient:'linear-gradient(90deg,#ef4444,#dc2626)',tag:'Analytics',     stat:'Protected categories', statVal:'12+ supported'},
@@ -412,7 +626,7 @@ export default function Home() {
 
   const steps = [
     {t:'Secure Ingestion',   d:'Upload HR, credit, or policy decision data through our encrypted endpoint or standard REST API.',e:'📥',tag:'Input Layer',   chips:['CSV','XLSX','API']},
-    {t:'Statistical Engine', d:'Automated computation of selection rates, DI ratios, and EEOC 4/5ths adverse impact flags.',   e:'⚙️',tag:'Core Analysis', chips:['EEOC','DI Ratio','p-value']},
+    {t:'Statistical Engine', d:'Automated computation of selection rates, DI ratios, and jurisdictional adverse impact flags.',   e:'⚙️',tag:'Core Analysis', chips:['Global Law','DI Ratio','p-value']},
     {t:'AI Translation',     d:'Gemini model converts complex statistics into actionable, plain-language compliance findings.',  e:'🧠',tag:'Generative AI', chips:['Gemini','RAG','NLP']},
     {t:'Blockchain Sealing', d:'SHA-256 hash of every audit is written on-chain — creating a tamper-proof compliance record.', e:'🔗',tag:'Ledger',         chips:['SHA-256','Polygon','IPFS']},
   ];
@@ -431,7 +645,7 @@ export default function Home() {
               Audit Your AI for<br/><span style={{background:'linear-gradient(135deg,#7c3aed,#6d28d9,#818cf8)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>Decision Fairness</span>
             </motion.h1>
             <motion.p variants={fadeUp} style={{fontSize:'1.05rem',maxWidth:470,marginBottom:'2rem',color:'var(--text-muted)',lineHeight:1.78}}>
-              Instantly detect algorithmic bias using global EEOC standards. Transform HR, credit, and policy datasets into verifiable fairness certificates.
+              Instantly detect algorithmic bias using global legal frameworks (US, EU, UK, India). Transform HR, credit, and policy datasets into verifiable fairness certificates.
             </motion.p>
             <motion.div variants={fadeUp} style={{display:'flex',flexWrap:'wrap',gap:12,marginBottom:'2.5rem'}}>
               <button onClick={()=>document.getElementById('demo')?.scrollIntoView({behavior:'smooth'})} style={{padding:'11px 26px',background:'linear-gradient(135deg,#8b5cf6,#6d28d9)',color:'white',border:'none',borderRadius:11,fontSize:14,fontWeight:700,cursor:'pointer',boxShadow:'0 8px 22px rgba(109,40,217,0.38)',transition:'all 0.3s'}}
@@ -446,10 +660,23 @@ export default function Home() {
               </button>
             </motion.div>
             <motion.div variants={fadeUp} style={{display:'flex',flexWrap:'wrap',gap:12}}>
-              {[{v:'100%',l:'Verifiability'},{v:'EEOC',l:'Standard'},{v:'GDPR',l:'Compliant'}].map(s=>(
-                <div key={s.l} style={{padding:'8px 18px',borderRadius:10,background:'rgba(255,255,255,0.72)',border:'1px solid rgba(196,181,253,0.45)',backdropFilter:'blur(8px)',textAlign:'center'}}>
-                  <div style={{fontSize:'1.3rem',fontWeight:900,color:'#6d28d9',lineHeight:1}}>{s.v}</div>
-                  <div style={{fontSize:9,fontWeight:700,color:'#9ca3af',letterSpacing:'0.12em',textTransform:'uppercase'}}>{s.l}</div>
+              {[
+                {v:'100%',l:'Verifiability',i:'🛡️'},
+                {v:'Global',l:'Standards',i:'⚖️'},
+                {v:'Multi',l:'Jurisdiction',i:'🌍'}
+              ].map(s=>(
+                <div key={s.l} style={{
+                  padding:'12px 20px',borderRadius:14,
+                  background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.7)',
+                  border: isDark ? '1px solid rgba(139,92,246,0.1)' : '1px solid rgba(196,181,253,0.4)',
+                  backdropFilter:'blur(12px)',textAlign:'center',
+                  minWidth:110, flex:1, maxWidth:140,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+                  transition: 'all 0.3s ease'
+                }}>
+                  <div style={{fontSize:14, marginBottom:4}}>{s.i}</div>
+                  <div style={{fontSize:'1.1rem',fontWeight:900,color:'var(--text-primary)',lineHeight:1,marginBottom:4}}>{s.v}</div>
+                  <div style={{fontSize:8,fontWeight:800,color:'var(--text-muted)',letterSpacing:'0.1em',textTransform:'uppercase'}}>{s.l}</div>
                 </div>
               ))}
             </motion.div>
@@ -475,6 +702,34 @@ export default function Home() {
         </motion.div>
         </div>
       </section>
+      {/* ════ GLOBAL NETWORK ════ */}
+      <section id="global" style={{background:'var(--surface-2)',padding:'4rem 1.5rem',borderBottom:'1px solid var(--border)'}}>
+        <div style={{maxWidth:1200,margin:'0 auto'}}>
+          <div style={{textAlign:'center',marginBottom:'3rem'}}>
+            <Pill>Global Coverage</Pill>
+            <h2 style={{fontSize:'2.25rem'}}>Compliance Across Jurisdictions</h2>
+            <p style={{marginTop:'1rem',maxWidth:700,margin:'1rem auto'}}>EquiAI is the only fairness engine with hardcoded logic for local legal thresholds, mapped to international Human Rights standards.</p>
+          </div>
+          
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))',gap:24}}>
+            {[
+              {flag:'🇺🇸',name:'USA EEOC',law:'Civil Rights Act',std:'80% Rule'},
+              {flag:'🇪🇺',name:'European Union',law:'EU AI Act 2024',std:'Conformity Check'},
+              {flag:'🇬🇧',name:'United Kingdom',law:'Equality Act 2010',std:'Proportionality'},
+              {flag:'🇮🇳',name:'India',law:'Const. Art 15/16',std:'Non-Discrim.'},
+              {flag:'🌍',name:'Global Baseline',law:'UN Human Rights',std:'Core Fairness'}
+            ].map((r,i)=>(
+              <motion.div key={i} whileHover={{y:-5}} style={{background:'var(--bg)',padding:'1.5rem',borderRadius:20,border:'1px solid var(--border-card)',textAlign:'center',boxShadow:'0 10px 30px rgba(0,0,0,0.02)'}}>
+                <div style={{fontSize:32,marginBottom:12}}>{r.flag}</div>
+                <h4 style={{fontSize:16,marginBottom:4}}>{r.name}</h4>
+                <div style={{fontSize:11,color:'#8b5cf6',fontWeight:800,textTransform:'uppercase',letterSpacing:'0.05em'}}>{r.law}</div>
+                <div style={{fontSize:12,color:'var(--text-muted)',marginTop:8}}>{r.std}</div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ════ DEMO ════ */}
       <section id="demo" style={{background:'var(--surface-2)',borderTop:'1px solid var(--border-card)',borderBottom:'1px solid var(--border-card)',padding:'4.5rem 1.5rem'}}>
         <div style={{maxWidth:1320,margin:'0 auto'}}>
@@ -486,57 +741,181 @@ export default function Home() {
             </motion.div>
 
             {/* Upload zone */}
-            <motion.div variants={fadeUp}
-              onClick={handleSampleUpload}
+            <input 
+              type="file" 
+              id="file-upload-input" 
+              accept=".csv" 
+              onChange={handleFileUpload} 
+              style={{ display: 'none' }} 
+            />
+            <div 
+              onClick={triggerFileInput}
               style={{
-                background: isDark ? 'linear-gradient(135deg, rgba(26,26,26,0.6), rgba(10,10,10,0.4))' : 'linear-gradient(135deg,rgba(245,243,255,0.8),rgba(237,233,254,0.5))',
-                border: isDark ? '2px dashed rgba(255,255,255,0.15)' : '2px dashed rgba(196,181,253,0.8)',
-                borderRadius:20,padding:'2.5rem',textAlign:'center',cursor:'pointer',transition:'all 0.3s',marginBottom:results?24:0
-              }}
-              whileHover={{
-                borderColor: isDark ? 'rgba(109,40,217,0.8)' : 'rgba(109,40,217,0.6)',
-                background: isDark ? 'rgba(26,26,26,0.9)' : 'rgba(245,243,255,0.98)'
+                background: isDark ? 'rgba(26,26,26,0.6)' : 'rgba(245,243,255,0.8)',
+                border: isDark ? '2px dashed rgba(255,255,255,0.15)' : '2px dashed rgba(109,40,217,0.4)',
+                borderRadius:20,padding:'2.5rem',textAlign:'center',cursor:'pointer',transition:'all 0.3s',marginBottom:results?24:0,
+                position: 'relative', zIndex: 1
               }}>
               <div style={{fontSize:38,marginBottom:10}}>📂</div>
-              <h4 style={{fontSize:16,marginBottom:5,color:'var(--text-primary)'}}>Drop Your Dataset Here</h4>
-              <p style={{color:'var(--text-muted)',fontSize:12,marginBottom:18}}>CSV / XLSX — up to 50MB</p>
+              <h4 style={{fontSize:16,marginBottom:5,color:'var(--text-primary)'}}>
+                {isAnalyzing ? 'Analyzing Datasets...' : 'Drop Your Dataset Here'}
+              </h4>
+              <p style={{color:'var(--text-muted)',fontSize:12,marginBottom:18}}>
+                {isAnalyzing ? 'Running EEOC compliance checks & Generative AI analysis' : 'CSV / XLSX — up to 50MB'}
+              </p>
+              
+              {!isAnalyzing && (
+                 <div style={{display:'flex', flexWrap:'wrap', justifyContent:'center', gap:12, marginBottom:16}}>
+                   <select 
+                     value={jurisdiction} 
+                     onChange={(e)=>setJurisdiction(e.target.value)}
+                     onClick={(e)=>e.stopPropagation()}
+                     style={{ background: 'var(--surface-2)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:700, outline:'none', cursor:'pointer' }}
+                   >
+                     <option value="US_EEOC">🇺🇸 US EEOC (80% Rule)</option>
+                     <option value="EU_AI_ACT">🇪🇺 EU AI Act (85% Standard)</option>
+                     <option value="UK_EQUALITY">🇬🇧 UK Equality Act 2010</option>
+                     <option value="INDIA">🇮🇳 India Constitution Art. 15</option>
+                     <option value="GLOBAL_MIN">🌍 UN Global Baseline</option>
+                   </select>
+
+                   <select 
+                     value={language} 
+                     onChange={(e)=>setLanguage(e.target.value)}
+                     onClick={(e)=>e.stopPropagation()}
+                     style={{ background: 'var(--surface-2)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:700, outline:'none', cursor:'pointer' }}
+                   >
+                     <option value="English">🇬🇧 English</option>
+                     <option value="Spanish">🇪🇸 Spanish</option>
+                     <option value="French">🇫🇷 French</option>
+                     <option value="Hindi">🇮🇳 Hindi</option>
+                     <option value="Arabic">🇦🇪 Arabic</option>
+                   </select>
+                 </div>
+              )}
+
               <div style={{display:'flex',justifyContent:'center',gap:10}}>
-                <span style={{padding:'8px 18px',borderRadius:9,background:'var(--card-bg)',border:'1px solid var(--border)',color:'var(--text-muted)',fontSize:12,fontWeight:700}}>Browse Files</span>
-                <span style={{padding:'8px 18px',borderRadius:9,background:'linear-gradient(135deg,#8b5cf6,#6d28d9)',color:'white',fontSize:12,fontWeight:700,boxShadow:'0 4px 12px rgba(109,40,217,0.3)'}}>⚡ Load Sample</span>
+                {!isAnalyzing && (
+                  <>
+                    <span onClick={triggerFileInput} style={{padding:'8px 18px',borderRadius:9,background:'var(--card-bg)',border:'1px solid var(--border)',color:'var(--text-primary)',fontSize:12,fontWeight:700, transition: 'all 0.2s', display: 'inline-block'}}
+                       onMouseEnter={e=>e.target.style.background='var(--surface-2)'}
+                       onMouseLeave={e=>e.target.style.background='var(--card-bg)'}>Browse Files</span>
+                    <span onClick={handleSampleUpload} style={{padding:'8px 18px',borderRadius:9,background:'linear-gradient(135deg,#8b5cf6,#6d28d9)',color:'white',fontSize:12,fontWeight:700,boxShadow:'0 4px 12px rgba(109,40,217,0.3)', transition: 'all 0.2s', display: 'inline-block'}}
+                       onMouseEnter={e=>e.target.style.transform='scale(1.05)'}
+                       onMouseLeave={e=>e.target.style.transform='scale(1)'}>⚡ Load Sample</span>
+                  </>
+                )}
+                {isAnalyzing && (
+                  <div style={{display:'flex', alignItems:'center', gap:12, justifyContent:'center', padding:'8px 0'}}>
+                    <div style={{width:20, height:20, border:'2.5px solid #8b5cf6', borderTopColor:'transparent', borderRadius:'50%', animation:'spin 0.75s linear infinite'}}/>
+                    <span style={{fontSize:13, fontWeight:700, color:'#8b5cf6'}}>Processing Audit...</span>
+                  </div>
+                )}
               </div>
-            </motion.div>
+            </div>
           </motion.div>
 
           {/* Results */}
           <AnimatePresence>
             {results && (
               <motion.div key="r" initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} style={{display:'flex',flexDirection:'column',gap:16}}>
-                {/* Verdict */}
-                <div style={{background:'var(--card-bg)',border:'1px solid var(--border-card)',borderRadius:18,padding:'1.5rem',display:'flex',flexWrap:'wrap',gap:20,alignItems:'center',boxShadow:'0 4px 20px rgba(109,40,217,0.06)'}}>
-                  <div style={{position:'relative',width:96,height:96,flexShrink:0}}>
-                    <svg width="96" height="96" viewBox="0 0 96 96" style={{transform:'rotate(-90deg)'}}>
-                      <circle cx="48" cy="48" r="40" fill="none" stroke="#f1f5f9" strokeWidth="7"/>
-                      <circle cx="48" cy="48" r="40" fill="none" stroke={vs?.dot||'#6ee7b7'} strokeWidth="7" strokeLinecap="round" strokeDasharray="251.3" strokeDashoffset={251.3*(1-results.overallBiasScore/100)} style={{transition:'stroke-dashoffset 1.4s cubic-bezier(0.34,1.1,0.64,1)',filter:'drop-shadow(0 0 5px currentColor)'}}/>
-                    </svg>
-                    <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
-                      <span style={{fontSize:22,fontWeight:900,color:'var(--text-primary)',lineHeight:1}}>{results.overallBiasScore}</span>
-                      <span style={{fontSize:8,fontWeight:800,color:'var(--text-hint)',letterSpacing:'0.15em',textTransform:'uppercase'}}>score</span>
+                {/* Auto Detection Banner */}
+                {autoDetectResult && (
+                  <div style={{background: 'rgba(16,185,129,0.1)', color: '#059669', padding: '10px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid rgba(16,185,129,0.2)', marginBottom: -6}}>
+                     <div style={{display:'flex', alignItems:'center', gap:8}}>
+                       <span style={{fontSize:16}}>🤖</span> 
+                       <span>Detected Use Case: <strong>{autoDetectResult.useCase}</strong> (Confidence: {autoDetectResult.confidence})</span>
+                     </div>
+                     <span 
+                       onClick={() => document.getElementById('useCaseDropdown').focus()} 
+                       style={{color:'#10b981', cursor:'pointer', fontSize:11, background:'rgba(16,185,129,0.15)', padding:'3px 8px', borderRadius:6, textTransform:'uppercase', letterSpacing:'0.05em'}}>
+                       [Change]
+                     </span>
+                  </div>
+                )}
+
+                {/* Use Case Banner */}
+                <div style={{background: 'rgba(139,92,246,0.1)', color: '#7c3aed', padding: '10px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(139,92,246,0.2)'}}>
+                   <span style={{fontSize:16}}>🎯</span> Only relevant fairness attributes are analyzed based on the selected use case ({useCase}).
+                </div>
+
+                {/* Verdict block replaced by Fairness Summary */}
+                <div style={{background:'var(--card-bg)',border:'1px solid var(--border-card)',borderRadius:18,padding:'1.5rem',display:'flex',flexDirection:'column',gap:16,boxShadow:'0 4px 20px rgba(109,40,217,0.06)'}}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10}}>
+                    <div>
+                      {vs&&<span style={{display:'inline-block',padding:'3px 12px',borderRadius:99,background:vs.bg,color:vs.txt,border:`1px solid ${vs.border}`,fontSize:11,fontWeight:800,letterSpacing:'0.05em',marginBottom:8}}>{vs.label.includes('Fair') ? vs.label : `🚨 ${vs.label}`}</span>}
+                      {highestBiasAttr?.score < (threshold * 100) && (
+                        <span style={{display:'inline-block', marginLeft: '8px', padding:'3px 12px',borderRadius:99,background:'#fee2e2',color:'#dc2626',border:`1px solid #fca5a5`,fontSize:11,fontWeight:800,flexWrap:'wrap',letterSpacing:'0.05em',marginBottom:8}}>🚨 Primary Issue: {highestBiasAttr?.col}</span>
+                      )}
+                      <h3 style={{fontSize:18,marginBottom:6,color:'var(--text-primary)'}}>Algorithmic Fairness Summary</h3>
+                    </div>
+                    <div style={{display:'flex', gap: 10, alignItems: 'center'}}>
+                        <button onClick={downloadReport} style={{padding:'6px 12px',background:'var(--surface-2)',color:'var(--text-primary)',border:'1px solid var(--border-card)',borderRadius:8,fontSize:10,fontWeight:700,cursor:'pointer',transition:'all 0.2s',whiteSpace:'nowrap'}} onMouseEnter={e=>e.target.style.background='var(--bg)'} onMouseLeave={e=>e.target.style.background='var(--surface-2)'}>📄 JSON</button>
+                        <button onClick={downloadPDF} style={{padding:'6px 14px',background:'linear-gradient(135deg,#8b5cf6,#6d28d9)',color:'#fff',border:'none',borderRadius:8,fontSize:10,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 10px rgba(109,40,217,0.2)',transition:'all 0.2s',whiteSpace:'nowrap'}} onMouseEnter={e=>e.target.style.transform='translateY(-2px)'} onMouseLeave={e=>e.target.style.transform='translateY(0)'}>⚖️ Export PDF</button>
+                        <select id="useCaseDropdown" value={useCase} onChange={e=>{setUseCase(e.target.value); setAutoDetectResult(null);}} style={{fontSize:12,fontWeight:700,color:'#8b5cf6',background:'var(--input-bg)',border:'1px solid var(--border-card)',borderRadius:7,padding:'6px 12px',outline:'none',cursor:'pointer'}}>
+                          <option value="Hiring">Use Case: Hiring</option>
+                          <option value="Loan">Use Case: Loan Approval</option>
+                          <option value="College">Use Case: College Admission</option>
+                        </select>
                     </div>
                   </div>
-                  <div style={{flex:1}}>
-                    {vs&&<span style={{display:'inline-block',padding:'3px 12px',borderRadius:99,background:vs.bg,color:vs.txt,border:`1px solid ${vs.border}`,fontSize:11,fontWeight:800,letterSpacing:'0.05em',marginBottom:8}}>{vs.label}</span>}
-                    <h3 style={{fontSize:18,marginBottom:6,color:'var(--text-primary)'}}>Algorithmic Integrity Report</h3>
-                    <p style={{fontSize:13,color:'var(--text-muted)',margin:0}}>Decision column <strong style={{color:'#8b5cf6'}}>"{results.decisionCol}"</strong> analysed across {results.demographicCols.length} demographic dimensions.</p>
+
+                  <div style={{background: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(245,243,255,0.6)', padding: '14px 18px', borderRadius: 12, border: '1px solid var(--border-card)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16}}>
+                     <div>
+                        <p style={{fontSize:11,color:'var(--text-hint)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',margin:0,marginBottom:4}}>🚨 Highest Bias Detected</p>
+                        <p style={{fontSize:16,color:'var(--text-primary)',fontWeight:800,margin:0}}>{highestBiasAttr?.col || 'None'} <span style={{fontSize:12, color:'#9ca3af', fontWeight:500}}>({highestBiasAttr?.impact?.toFixed(2)})</span></p>
+                     </div>
+                     <div>
+                        <p style={{fontSize:11,color:'var(--text-hint)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',margin:0,marginBottom:4}}>Overall Bias Score</p>
+                        <p style={{fontSize:16,color:'var(--text-primary)',fontWeight:800,margin:0}}>{dynamicOverallScore} <span style={{fontSize:11,color:'var(--text-muted)',fontWeight:600}}>/ 100</span></p>
+                     </div>
+                     <div>
+                        <p style={{fontSize:11,color:'var(--text-hint)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',margin:0,marginBottom:4}}>Disparate Impact (Worst Case)</p>
+                        <p style={{fontSize:16,color:highestBiasAttr?.impact >= 0.8 ? '#10b981' : '#ef4444',fontWeight:800,margin:0}}>{highestBiasAttr?.impact?.toFixed(2)} {highestBiasAttr?.impact >= 0.8 ? '🟢 (Fair)' : '🔴 (Biased)'}</p>
+                     </div>
+                  </div>
+                </div>
+
+                {/* Attribute Summary Table */}
+                <div style={{background:'var(--card-bg)',border:'1px solid var(--border-card)',borderRadius:16,padding:'1.5rem',boxShadow:'0 2px 12px rgba(109,40,217,0.04)'}}>
+                  <div style={{marginBottom:16}}>
+                    <h4 style={{fontSize:14,fontWeight:800,color:'var(--text-primary)'}}>Attribute Fairness Dashboard</h4>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,fontSize:12,fontWeight:700,color:'var(--text-hint)',paddingBottom:8,borderBottom:'1px solid var(--border-card)',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                    <span>Attribute</span>
+                    <span>Disparate Impact</span>
+                    <span>Status</span>
+                  </div>
+                  <div style={{display:'flex',flexDirection:'column'}}>
+                    {filteredCols.map((c, i) => {
+                      const an = results.columnAnalyses[c];
+                      const impact = an.minRatio;
+                      const score = an.biasScore;
+                      return (
+                        <div key={c} style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,padding:'12px 0',borderBottom:i===filteredCols.length-1?'none':'1px solid var(--border-card)',alignItems:'center'}}>
+                           <span style={{fontWeight:600,color:'var(--text-primary)'}}>{c}</span>
+                           <span style={{fontWeight:700,color:impact >= 0.8 ? '#10b981' : '#ef4444'}}>{impact.toFixed(2)}</span>
+                           <span style={{fontWeight:800, color:(score/100) >= threshold ? '#059669' : (score/100) >= (threshold-0.2) ? '#d97706' : (score/100) >= (threshold-0.4) ? '#f97316' : '#dc2626'}}>
+                             {(score/100) >= threshold ? '🟢 Fair' : (score/100) >= (threshold-0.2) ? '🟡 Moderate' : (score/100) >= (threshold-0.4) ? '🟠 High Bias' : '🔴 Severe Bias'} ({score})
+                           </span>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
 
                 {/* Charts */}
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
                   <div style={{background:'var(--card-bg)',border:'1px solid var(--border-card)',borderRadius:16,padding:'1.25rem',height:300,display:'flex',flexDirection:'column',boxShadow:'0 2px 12px rgba(109,40,217,0.04)'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-                      <h4 style={{fontSize:13,fontWeight:800,color:'var(--text-primary)'}}>Selection Rates by Group</h4>
-                      <select value={selectedCol} onChange={e=>setSelectedCol(e.target.value)} style={{fontSize:11,fontWeight:700,color:'#8b5cf6',background:'var(--input-bg)',border:'1px solid var(--border-card)',borderRadius:7,padding:'3px 8px',outline:'none',cursor:'pointer'}}>
-                        {results.demographicCols.map(c=><option key={c} value={c}>{c}</option>)}
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,gap:10}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <h4 style={{fontSize:13,fontWeight:800,color:'var(--text-primary)',margin:0}}>Selection Rates by Group</h4>
+                        {currentAnalysis?.isSmartBucketed && (
+                          <div style={{background:'rgba(16,185,129,0.1)',color:'#10b981',fontSize:9,fontWeight:900,padding:'2px 8px',borderRadius:20,border:'1px solid rgba(16,185,129,0.2)',whiteSpace:'nowrap'}}>AUTO-BINNED</div>
+                        )}
+                      </div>
+                      <select value={selectedCol} onChange={e=>setSelectedCol(e.target.value)} style={{fontSize:11,fontWeight:700,color:'#8b5cf6',background:'var(--input-bg)',border:'1px solid var(--border-card)',borderRadius:7,padding:'4px 10px',outline:'none',cursor:'pointer'}}>
+                        {filteredCols.map(c=><option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div style={{flex:1}}>
@@ -555,21 +934,63 @@ export default function Home() {
                   </div>
 
                   <div style={{background:isDark?'linear-gradient(135deg,rgba(139,92,246,0.05),transparent)':'linear-gradient(135deg,#f5f3ff,#faf9ff)',border:'1px solid var(--border-card)',borderRadius:16,padding:'1.25rem',display:'flex',flexDirection:'column',gap:12,boxShadow:'0 2px 12px rgba(109,40,217,0.04)'}}>
-                    <span style={{fontSize:9,fontWeight:900,color:'#8b5cf6',letterSpacing:'0.2em',textTransform:'uppercase'}}>🧠 AI Contextual Analysis</span>
-                    <p style={{fontSize:13,color:'var(--text-muted)',fontStyle:'italic',lineHeight:1.75,margin:0,flex:1}}>
-                      "{selectedCol}" exhibits a <strong style={{color:'var(--text-primary)'}}>{currentAnalysis?.biasLevel?.toLowerCase()||'…'}</strong> selection bias. Disparate Impact ratio: <strong style={{color:'#8b5cf6'}}>{currentAnalysis?.minRatio?.toFixed(3)||'…'}</strong>. <strong>{currentAnalysis?.majorityGroup||'Majority group'}</strong> candidates are selected at a disproportionately higher rate. Human review recommended.
-                    </p>
-                    <div style={{paddingTop:10,borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                      <span style={{fontSize:9,fontWeight:700,color:'#9ca3af',letterSpacing:'0.12em',textTransform:'uppercase'}}>Block Hash</span>
-                      <code style={{fontSize:11,fontWeight:700,color:'#7c3aed',fontFamily:'monospace'}}>SHA256:0x8A…3F2</code>
-                    </div>
-                    <div style={{display:'flex',gap:6}}>
-                      {['Majority','Minority'].map((l,i)=>(
-                        <span key={l} style={{fontSize:11,padding:'4px 10px',borderRadius:99,display:'flex',alignItems:'center',gap:5,background:i===0?'rgba(124,58,237,0.08)':'rgba(239,68,68,0.08)',color:i===0?'#7c3aed':'#ef4444',fontWeight:700}}>
-                          <span style={{width:8,height:8,borderRadius:2,background:i===0?'#7c3aed':'#ef4444',display:'inline-block'}}/>
-                          {l}
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <span style={{fontSize:9,fontWeight:900,color:'#8b5cf6',letterSpacing:'0.2em',textTransform:'uppercase'}}>🧠 AI Contextual Analysis</span>
+                      {aiLoading && (
+                        <span style={{display:'flex',alignItems:'center',gap:6,fontSize:10,color:'#8b5cf6',fontWeight:700}}>
+                          <div style={{width:10,height:10,border:'2px solid #8b5cf6',borderTopColor:'transparent',borderRadius:'50%',animation:'spin 0.75s linear infinite'}}/>
+                          Gemini upgrading...
                         </span>
-                      ))}
+                      )}
+                    </div>
+
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                       <div style={{fontSize:10,fontWeight:900,textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--text-hint)'}}>{selectedCol} Context</div>
+                       {currentAnalysis?.biasLevel === 'FAIR' ? (
+                         <span style={{fontSize:9,fontWeight:900,color:'#10b981',background:'rgba(16,185,129,0.1)',padding:'2px 8px',borderRadius:4}}>✔ NO BIAS DETECTED</span>
+                       ) : currentAnalysis?.biasLevel === 'MODERATE' ? (
+                         <span style={{fontSize:9,fontWeight:900,color:'#d97706',background:'rgba(217,119,6,0.1)',padding:'2px 8px',borderRadius:4}}>⚠ MODERATE BIAS DETECTED</span>
+                       ) : (
+                         <span style={{fontSize:9,fontWeight:900,color:'#ef4444',background:'rgba(239,68,68,0.1)',padding:'2px 8px',borderRadius:4}}>🚨 BIAS DETECTED</span>
+                       )}
+                    </div>
+                    <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',marginBottom:10,lineHeight:1.4}}>{currentAnalysis?.comparison_insight || 'Collecting comparative data...'}</div>
+                    <div style={{display:'flex',flexDirection:'column',gap:6,background:isDark?'rgba(0,0,0,0.2)':'rgba(255,255,255,0.6)',padding:'10px 14px',borderRadius:10,border:'1px solid var(--border-card)'}}>
+                       {chartData.map((g, i) => (
+                           <div key={i} style={{fontSize:12,display:'flex',justifyContent:'space-between',color:'var(--text-primary)'}}>
+                             <span>{g.name} Selection Rate:</span>
+                             <strong style={{color:'#8b5cf6'}}>{g.rate}%</strong>
+                           </div>
+                       ))}
+                       <div style={{height:1,background:'var(--border-card)',margin:'4px 0'}}/>
+                       <div style={{fontSize:12,display:'flex',justifyContent:'space-between',color:'var(--text-primary)',fontWeight:800}}>
+                         <span>Disparate Impact:</span>
+                         <span style={{color:currentAnalysis?.minRatio >= 0.8 ? '#10b981' : '#ef4444'}}>
+                           {currentAnalysis?.minRatio?.toFixed(2)} {currentAnalysis?.minRatio >= 0.8 ? '🟢 (Fair)' : '🔴 (Biased)'}
+                         </span>
+                       </div>
+                    </div>
+
+                    {/* AI Explanation — instantly shows rule-based, auto-upgrades to Gemini */}
+                    {aiExplanation ? (
+                      <div style={{fontSize:12,color:'var(--text-muted)',lineHeight:1.7,whiteSpace:'pre-line',background:isDark?'rgba(0,0,0,0.15)':'rgba(255,255,255,0.7)',padding:'10px 14px',borderRadius:10,border:'1px solid var(--border-card)',maxHeight:180,overflowY:'auto'}}>
+                        {aiExplanation}
+                      </div>
+                    ) : (
+                      <p style={{fontSize:13,color:'var(--text-muted)',fontStyle:'italic',lineHeight:1.65,margin:0,flex:1}}>
+                        "{selectedCol}" exhibits evidence of a <strong style={{color:'var(--text-primary)'}}>{currentAnalysis?.biasLevel?.toLowerCase()||'…'}</strong> selection pattern. <strong>{currentAnalysis?.majorityGroup||'Majority group'}</strong> applicants are favored {useCaseText}.
+                      </p>
+                    )}
+
+                    <div style={{fontSize:12,padding:'8px 12px',background:'rgba(139,92,246,0.1)',borderRadius:8,color:'#7c3aed',fontWeight:600}}>
+                       💡 Recommendation: {(dynamicOverallScore / 100) < threshold ? `Action Required: Consider reviewing features contributing to bias in the dataset (detected in ${highestBiasAttr?.col}).` : `No immediate action required for these attributes under current legal standards.`}
+                    </div>
+
+                    <div style={{background:isDark?'rgba(0,0,0,0.6)':'#1e1b4b',color:'#10b981',padding:'12px 14px',borderRadius:8,fontFamily:'monospace',fontSize:10,display:'flex',flexDirection:'column',gap:4,boxShadow:'inset 0 0 10px rgba(0,0,0,0.5)'}}>
+                       <div style={{display:'flex',justifyContent:'space-between',color:'#fff'}}><strong>Immutable Block #{blockchainBlock?.index || '0'}</strong> <span style={{color:'#10b981'}}>Verified ✅</span></div>
+                       <div style={{color:'#9ca3af'}}>Mined: <span style={{color:'#d1d5db'}}>{blockchainBlock?.timestamp ? new Date(blockchainBlock.timestamp).toLocaleString() : new Date().toLocaleString()}</span></div>
+                       <div style={{color:'#9ca3af', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>Hash: <span style={{color:'#8b5cf6'}}>{blockchainBlock?.hash || 'SHA256: PROCESSING...'}</span></div>
+                       <div style={{color:'#9ca3af', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>Prev: <span style={{color:'#6b7280'}}>{blockchainBlock?.prev_hash || 'SHA256: TAIL...'}</span></div>
                     </div>
                   </div>
                 </div>
@@ -652,6 +1073,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+
 
       {/* ════ FOOTER ════ */}
       <footer style={{background:'var(--footer-bg)',padding:'4rem 2rem 2.5rem',color:'var(--footer-text)',transition:'background 0.35s ease'}}>

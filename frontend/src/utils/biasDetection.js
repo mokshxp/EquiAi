@@ -18,9 +18,33 @@ export function detectColumns(rows) {
 }
 
 export function analyzeColumn(rows, decisionCol, demographicCol) {
+  const vals = rows.map(r => r[demographicCol]).filter(v => v !== null && v !== undefined && v !== '');
+  const uniques = new Set(vals);
+  
+  let isNumeric = false;
+  let median = 0;
+  
+  // Continuous Variable Bucketing Logic
+  if (uniques.size > 10) {
+    const numVals = vals.map(v => parseFloat(v)).filter(n => !isNaN(n));
+    if (numVals.length > vals.length * 0.8) { 
+      isNumeric = true;
+      numVals.sort((a, b) => a - b);
+      median = numVals[Math.floor(numVals.length / 2)];
+    }
+  }
+
   const groups = {}
   rows.forEach(row => {
-    const group = String(row[demographicCol] ?? 'Unknown')
+    let rawVal = row[demographicCol];
+    let group = String(rawVal ?? 'Unknown')
+    
+    if (isNumeric && rawVal !== null && rawVal !== undefined && rawVal !== '') {
+      const num = parseFloat(rawVal);
+      if (!isNaN(num)) {
+        group = num < median ? `Low (Under ${median})` : `High (${median}+)`;
+      }
+    }
     if (!groups[group]) groups[group] = { total: 0, selected: 0 }
     groups[group].total++
     const isPos = POSITIVE_VALUES.has(String(row[decisionCol]).toLowerCase().trim())
@@ -33,16 +57,42 @@ export function analyzeColumn(rows, decisionCol, demographicCol) {
   const ratios = {}
   Object.entries(groupRates).forEach(([g, rate]) => ratios[g] = majorityRate > 0 ? rate / majorityRate : 1)
   const minRatio = Math.min(...Object.values(ratios))
-  let biasScore = minRatio >= 1.0 ? 0 : minRatio >= 0.8 ? ((1.0 - minRatio) / 0.2) * 20 : 20 + ((0.8 - minRatio) / 0.3) * 50
-  return { column: demographicCol, groups, groupRates, majorityGroup, majorityRate, ratios, minRatio, biasScore: Math.min(Math.round(biasScore), 100), biasLevel: minRatio < 0.8 ? 'BIASED' : minRatio < 0.9 ? 'WARNING' : 'FAIR' }
+  let biasScore = Math.min(minRatio, 1.0) * 100;
+  return { column: demographicCol, groups, groupRates, majorityGroup, majorityRate, ratios, minRatio, biasScore: Math.round(biasScore), biasLevel: biasScore < 50 ? 'BIASED' : biasScore < 80 ? 'WARNING' : 'FAIR' }
 }
 
 export function runBiasAnalysis(rows) {
   const { demographicCols, decisionCol } = detectColumns(rows)
   if (!decisionCol || demographicCols.length === 0) return { error: 'Missing columns' }
+  
+  // Smart Auto-Detection for Use Case
+  let predictedUseCase = 'Hiring'; // Default fallback
+  let confidence = 'Low';
+  
+  const targetCol = String(decisionCol).toLowerCase().trim();
+  
+  // Sample up to 100 limit to keep it extremely fast
+  const sampleRows = rows.slice(0, 100);
+  const decisionValsStr = sampleRows.map(r => String(r[decisionCol]).toLowerCase()).join(' ');
+  
+  const isLoan = targetCol.includes('loan') || targetCol.includes('approve') || decisionValsStr.includes('approved') || decisionValsStr.includes('loan');
+  const isCollege = targetCol.includes('admit') || targetCol.includes('admission') || decisionValsStr.includes('admitted');
+  const isHiring = targetCol.includes('hire') || targetCol.includes('select') || decisionValsStr.includes('hired') || decisionValsStr.includes('selected');
+  
+  if (isLoan) {
+    predictedUseCase = 'Loan';
+    confidence = 'High';
+  } else if (isCollege) {
+    predictedUseCase = 'College';
+    confidence = 'High';
+  } else if (isHiring) {
+    predictedUseCase = 'Hiring';
+    confidence = 'High';
+  }
+
   const columnAnalyses = {}
   demographicCols.forEach(col => columnAnalyses[col] = analyzeColumn(rows, decisionCol, col))
   const allScores = Object.values(columnAnalyses).map(a => a.biasScore)
-  const overallBiasScore = Math.max(...allScores)
-  return { totalRows: rows.length, totalSelected: rows.filter(r => POSITIVE_VALUES.has(String(r[decisionCol]).toLowerCase().trim())).length, decisionCol, demographicCols, columnAnalyses, overallBiasScore, overallBiasLevel: overallBiasScore >= 40 ? 'BIASED' : overallBiasScore >= 20 ? 'WARNING' : 'FAIR' }
+  const overallBiasScore = Math.min(...allScores)
+  return { predictedUseCase, confidence, totalRows: rows.length, totalSelected: rows.filter(r => POSITIVE_VALUES.has(String(r[decisionCol]).toLowerCase().trim())).length, decisionCol, demographicCols, columnAnalyses, overallBiasScore, overallBiasLevel: overallBiasScore < 50 ? 'BIASED' : overallBiasScore < 80 ? 'WARNING' : 'FAIR' }
 }

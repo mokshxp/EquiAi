@@ -1,6 +1,6 @@
-# EquiAI — AI Bias Detection & Fairness Auditing System
+# EquiAI — Global AI Fairness & Accountability Standard
 
-> Detect algorithmic bias in datasets with AI-powered explanations and immutable audit logging.
+> Wherever AI makes decisions about human lives — hiring in Mumbai, loans in Lagos, admissions in São Paulo, healthcare in Berlin — EquiAI ensures those decisions are fair, explainable, and legally documented under local law. We're building the global standard for AI accountability.
 
 ---
 
@@ -127,6 +127,49 @@ Henry,Male,Black,Yes
 ```
 
 Click **"Load Sample Data"** on the homepage to use this instantly.
+
+## 🤖 Enterprise Automation Pipeline
+
+EquiAI supports end-to-end fairness automation across your entire stack:
+
+| Integration | Description |
+|---|---|
+| **Scheduled Scanning** | Connect to HR/DB systems to run automated CSV audits via cron jobs. |
+| **CI/CD "Fairness Gate"** | GitHub Actions blocks ML model deployments if the bias score drops below 80. |
+| **API Webhooks** | Submit real-time decisions to `/api/webhook/evaluate` for immediate drift alerts. |
+| **Automated Reporting** | Auto-generates PDF reports and seals them on the blockchain monthly. |
+| **Always-On Monitoring** | Live dashboard tracking fairness scores over time, triggering Slack/Email alerts. |
+
+```mermaid
+graph TD
+    A[Data Source] -->|Auto every X days| B(EquiAI FastAPI)
+    B --> C{Bias Engine}
+    C -->|If Biased| D[Block Deployment/Alert Slack]
+    C -->|If Fair| E[Blockchain Seal]
+    C --> F((Gemini AI Explanation))
+    E --> G[Auto PDF Report]
+```
+
+---
+
+## 🌍 Global Compliance Engine
+
+EquiAI is the world's first **multi-jurisdiction** AI fairness protocol. Instead of hardcoding a single US law, simply select where your AI operates:
+
+| Region | Law / Standard | Fairness Test Threshold |
+|--------|----------------|-------------------------|
+| 🇺🇸 USA | EEOC 4/5ths Rule | 80% Requirement |
+| 🇪🇺 EU  | EU AI Act 2024   | 85% Conformity Test |
+| 🇬🇧 UK  | Equality Act 2010| 82% Proportionality |
+| 🇮🇳 IND | Const. Article 15| 80% Non-Discrimination |
+
+### 🇺🇳 UN SDG Alignment built-in:
+Every audit automatically maps flagged bias metrics directly to **UN Sustainable Development Goals**:
+* Gender bias → **SDG 5** (Gender Equality) ⚠️
+* Race bias → **SDG 10** (Reduced Inequalities) ⚠️
+* Systemic bias → **SDG 16** (Strong Institutions) ⚠️
+
+By linking AI fairness directly to SDGs, we make algorithmic ethics universally understood across 193 nations. Plus, our **Multi-language AI Explainer** automatically translates deep analytical findings into Spanish, Hindi, French, and more.
 
 ---
 

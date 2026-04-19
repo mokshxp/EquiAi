@@ -7,13 +7,18 @@ import time
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
+from typing import Optional, List, Dict, Any
+
 import pandas as pd
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
+
+# For advanced scheduling/cron
+# from apscheduler.schedulers.background import BackgroundScheduler
 
 load_dotenv()
 
@@ -104,6 +109,17 @@ def detect_columns(df: pd.DataFrame):
     return demographic_cols, decision_col
 
 
+# ─────────────────────────────────────────────
+# Global Jurisdictions Engine
+# ─────────────────────────────────────────────
+JURISDICTIONS = {
+    "US_EEOC":     {"threshold": 0.80, "standard": "US EEOC 80% Rule"},
+    "EU_AI_ACT":   {"threshold": 0.85, "standard": "EU AI Act 85% Standard"},
+    "UK_EQUALITY": {"threshold": 0.80, "standard": "UK Equality Act 2010"},
+    "INDIA":       {"threshold": 0.75, "standard": "India Constitution Art. 15"},
+    "GLOBAL_MIN":  {"threshold": 0.80, "standard": "UN Global Baseline"},
+}
+
 def normalize_decision(val) -> bool:
     """Convert decision values to True/False."""
     return str(val).lower().strip() in POSITIVE_VALUES
@@ -133,34 +149,25 @@ def compute_disparate_impact(group_rates: Dict[str, float]) -> Dict:
 
 def compute_bias_score(disparate_impact_result: Dict) -> float:
     """
-    Bias score 0–100.
-    0 = perfectly fair, 100 = maximally biased.
-    Based on min disparate impact ratio across all groups.
+    Fairness score 0–100.
+    100 = perfectly fair (DI=1.0), 0 = severe bias (DI=0.0).
     """
     ratios = disparate_impact_result.get("ratios", {})
     if not ratios:
-        return 0.0
+        return 100.0 # If no groups to compare, treat as fair
     
     min_ratio = min(ratios.values())
-    # Map: ratio 1.0 → score 0, ratio 0.0 → score 100
-    # Using penalty below 0.8 threshold heavily
-    if min_ratio >= 1.0:
-        return 0.0
-    elif min_ratio >= 0.8:
-        # Mild range: 0–20
-        score = (1.0 - min_ratio) / 0.2 * 20
-    elif min_ratio >= 0.5:
-        # Moderate: 20–70
-        score = 20 + (0.8 - min_ratio) / 0.3 * 50
-    else:
-        # Severe: 70–100
-        score = 70 + (0.5 - min_ratio) / 0.5 * 30
+    # Score is simply the min ratio as a percentage
+    score = min_ratio * 100
     
-    return round(min(score, 100.0), 2)
+    return round(min(max(score, 0.0), 100.0), 2)
 
 
-def analyze_bias(df: pd.DataFrame, decision_col: str, demographic_cols: List[str]) -> Dict:
-    """Full bias analysis for all demographic columns."""
+def analyze_bias(df: pd.DataFrame, decision_col: str, demographic_cols: List[str], jurisdiction_key: str = "GLOBAL_MIN") -> Dict:
+    """Full bias analysis for all demographic columns, dynamically applying jurisdiction logic."""
+    
+    jur_info = JURISDICTIONS.get(jurisdiction_key, JURISDICTIONS["GLOBAL_MIN"])
+    threshold = jur_info["threshold"]
     
     df = df.copy()
     df["__decision__"] = df[decision_col].apply(normalize_decision)
@@ -172,7 +179,42 @@ def analyze_bias(df: pd.DataFrame, decision_col: str, demographic_cols: List[str
     column_analyses = {}
     
     for dem_col in demographic_cols:
-        groups = df.groupby(dem_col)
+        col_lower = dem_col.lower()
+        is_bucketed = False
+        
+        # --- Specialized Grouping Logic ---
+        if 'age' in col_lower:
+            # Group into Young (<30) vs Senior (30+)
+            df_temp = pd.to_numeric(df[dem_col], errors='coerce')
+            processed_series = df_temp.apply(
+                lambda x: "Young (<30)" if pd.notna(x) and x < 30 else "Senior (30+)" if pd.notna(x) else "Unknown"
+            )
+            is_bucketed = True
+        elif 'education' in col_lower or 'degree' in col_lower:
+            # Group into Undergraduate vs Advanced
+            mapping = {
+                'bachelor': 'Undergraduate', 'graduate': 'Advanced', 
+                'master': 'Advanced', 'phd': 'Advanced', 
+                'doctor': 'Advanced', 'high school': 'Basic', 
+                'diploma': 'Basic'
+            }
+            processed_series = df[dem_col].apply(
+                lambda x: next((v for k,v in mapping.items() if k in str(x).lower()), "Other")
+            )
+            is_bucketed = True
+        elif pd.api.types.is_numeric_dtype(df[dem_col]) and df[dem_col].nunique() > 10:
+            # Generic Numeric Bucketing (Income, Experience, etc.)
+            median_val = df[dem_col].median()
+            processed_series = df[dem_col].apply(
+                lambda x: f"High (>{median_val})" if pd.notna(x) and x >= median_val else f"Low (<{median_val})"
+            )
+            is_bucketed = True
+        else:
+            processed_series = df[dem_col]
+
+        # Count groups
+        groups = df.assign(processed=processed_series).groupby('processed')
+            
         group_rates = {}
         group_counts = {}
         
@@ -188,20 +230,43 @@ def analyze_bias(df: pd.DataFrame, decision_col: str, demographic_cols: List[str
         di = compute_disparate_impact(group_rates)
         bias_score = compute_bias_score(di)
         
-        # Determine bias level per column
         min_ratio = min(di["ratios"].values()) if di.get("ratios") else 1.0
-        if min_ratio < 0.8:
-            bias_level = "BIASED"
-            bias_color = "red"
-        elif min_ratio < 0.9:
-            bias_level = "WARNING"
-            bias_color = "yellow"
-        else:
+        
+        if min_ratio >= threshold:
             bias_level = "FAIR"
             bias_color = "green"
+            severity = "Low"
+        elif min_ratio >= (threshold - 0.20):
+            bias_level = "MODERATE"
+            bias_color = "yellow"
+            severity = "Medium"
+        elif min_ratio >= (threshold - 0.40):
+            bias_level = "HIGH_BIAS"
+            bias_color = "orange"
+            severity = "High"
+        else:
+            bias_level = "SEVERE"
+            bias_color = "red"
+            severity = "Critical"
+
+        # Add Comparison Insight (Safely)
+        comparison_insight = "Selection rates are relatively balanced"
+        if di and di.get("majority_group") and group_rates:
+            try:
+                maj_group = di.get("majority_group")
+                min_group = min(group_rates, key=group_rates.get)
+                min_rate = group_rates.get(min_group, 0)
+                maj_rate = group_rates.get(maj_group, 0)
+                
+                if min_rate > 0 and maj_group != min_group:
+                    ratio_diff = float(maj_rate / min_rate)
+                    if ratio_diff > 1.1:
+                        comparison_insight = f"{min_group} selected ~{ratio_diff:.1f}x less than {maj_group}"
+            except Exception:
+                pass # Fallback to default insight if calculation fails
         
         flagged_groups = [
-            g for g, r in di.get("ratios", {}).items() if r < 0.8
+            g for g, r in di.get("ratios", {}).items() if r < threshold
         ]
         
         column_analyses[dem_col] = {
@@ -211,20 +276,28 @@ def analyze_bias(df: pd.DataFrame, decision_col: str, demographic_cols: List[str
             "bias_score": bias_score,
             "bias_level": bias_level,
             "bias_color": bias_color,
+            "severity": severity,
+            "comparison_insight": comparison_insight,
             "flagged_groups": flagged_groups,
             "min_ratio": round(min_ratio, 4),
+            "threshold_applied": threshold,
+            "is_smart_bucketed": is_bucketed,
         }
     
-    # Overall bias score = max across all columns
     all_scores = [v["bias_score"] for v in column_analyses.values()]
-    overall_bias_score = max(all_scores) if all_scores else 0.0
+    # Overall logic based on the worst-case attribute
+    overall_bias_score = min(all_scores) if all_scores else 100.0
     
-    if overall_bias_score >= 40:
-        overall_bias_level = "BIASED"
-    elif overall_bias_score >= 20:
-        overall_bias_level = "WARNING"
-    else:
+    overall_min_ratio = overall_bias_score / 100.0
+    
+    if overall_min_ratio >= threshold:
         overall_bias_level = "FAIR"
+    elif overall_min_ratio >= (threshold - 0.20):
+        overall_bias_level = "MODERATE"
+    elif overall_min_ratio >= (threshold - 0.40):
+        overall_bias_level = "HIGH_BIAS"
+    else:
+        overall_bias_level = "SEVERE"
     
     return {
         "total_rows": total_rows,
@@ -235,6 +308,8 @@ def analyze_bias(df: pd.DataFrame, decision_col: str, demographic_cols: List[str
         "column_analyses": column_analyses,
         "overall_bias_score": overall_bias_score,
         "overall_bias_level": overall_bias_level,
+        "jurisdiction_standard": jur_info["standard"],
+        "jurisdiction_threshold": threshold,
     }
 
 
@@ -242,34 +317,44 @@ def analyze_bias(df: pd.DataFrame, decision_col: str, demographic_cols: List[str
 # Gemini AI Explainer
 # ─────────────────────────────────────────────
 
-async def get_ai_explanation(bias_results: Dict) -> str:
-    """Get plain-English bias explanation from Gemini."""
+async def get_ai_explanation(bias_results: Dict, jurisdiction_info: str = "Global Standard", language: str = "English") -> str:
+    """Get plain-English bias explanation from Gemini in multi-language and tailored to SDG/jurisdiction."""
     api_key = os.getenv("GEMINI_API_KEY", "")
     if not api_key or api_key == "your_gemini_api_key_here":
         return generate_rule_based_explanation(bias_results)
     
     try:
+        import asyncio
         import google.generativeai as genai
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel("gemini-1.5-flash")
         
         summary = build_bias_summary_text(bias_results)
         
-        prompt = f"""You are an AI fairness expert. Analyze the following bias audit results and provide:
-1. A clear, plain-English explanation of the bias found (2-3 sentences)
-2. The root causes of this bias (bullet points)
-3. Specific actionable recommendations to fix it (bullet points)
-4. Legal and ethical implications (1-2 sentences)
+        prompt = f"""You are an AI fairness auditor producing an enterprise compliance report.
 
-Bias Audit Results:
+Write the response in {language}.
+Relevant Legal Framework: {jurisdiction_info}
+
+Analyze this demographic data:
 {summary}
 
-Overall Bias Score: {bias_results['overall_bias_score']}/100
-Bias Level: {bias_results['overall_bias_level']}
+Format your response exactly with these headers without Markdown headings `#`:
+EXECUTIVE SUMMARY
+Is this dataset biased under the {jurisdiction_info}? Explain why.
 
-Keep your response professional, empathetic, and actionable. Format with clear sections."""
+UN SDG ALIGNMENT
+Map the findings specifically to UN Sustainable Development Goals (e.g. SDG 5 for gender, SDG 10 for inequalities). Be specific.
 
-        response = model.generate_content(prompt)
+ROOT CAUSES
+Why are the selection rates different? What is happening in the data?
+
+REMEDIATION STEPS
+Provide 2 highly specific, technical ML/Data actions to fix this.
+
+Keep it professional, highly analytical, and legally framed."""
+
+        response = await asyncio.wait_for(model.generate_content_async(prompt), timeout=6.0)
         return response.text
     except Exception as e:
         return generate_rule_based_explanation(bias_results)
@@ -297,22 +382,27 @@ def generate_rule_based_explanation(bias_results: Dict) -> str:
     
     parts = []
     
-    if level == "BIASED":
-        parts.append(f"🚨 **Critical Bias Detected** (Score: {score}/100)\n\nThis dataset shows statistically significant bias that violates the standard 80% Disparate Impact rule. Certain demographic groups are being systematically disadvantaged in the selection process.\n")
-    elif level == "WARNING":
-        parts.append(f"⚠️ **Potential Bias Warning** (Score: {score}/100)\n\nThis dataset shows patterns that may indicate bias. While not at critical levels, the disparate impact ratios suggest some groups may be receiving less favorable outcomes.\n")
+    if level == "SEVERE":
+        parts.append(f"🚨 **Critical Bias Detected** (Fairness Score: {score}/100)\n\n")
+    elif level == "HIGH_BIAS":
+        parts.append(f"🚨 **High Risk Bias Detected** (Fairness Score: {score}/100)\n\n")
+    elif level == "MODERATE":
+        parts.append(f"⚠️ **Potential Bias Warning** (Fairness Score: {score}/100)\n\n")
     else:
-        parts.append(f"✅ **No Significant Bias Detected** (Score: {score}/100)\n\nThe dataset appears to be relatively fair across demographic groups, with disparate impact ratios above the 0.8 threshold.\n")
+        parts.append(f"✅ **No Significant Bias Detected** (Fairness Score: {score}/100)\n\n")
+
+    biased_cols = [col for col, an in bias_results["column_analyses"].items() if an["bias_level"] != "FAIR"]
+    fair_cols = [col for col, an in bias_results["column_analyses"].items() if an["bias_level"] == "FAIR"]
     
-    parts.append("**Root Causes (Common Patterns):**")
+    if biased_cols:
+        parts.append(f"Bias detected primarily in **{', '.join(biased_cols)}**. ")
+    if fair_cols:
+        parts.append(f"**{', '.join(fair_cols)}** {'shows' if len(fair_cols)==1 else 'show'} no significant bias. ")
     
-    for col, analysis in bias_results["column_analyses"].items():
-        if analysis["flagged_groups"]:
-            parts.append(f"\n• **{col}**: Groups {', '.join(analysis['flagged_groups'])} have selection rates significantly below the majority group ({analysis['disparate_impact'].get('majority_group')}). This may reflect historical inequities, proxy discrimination, or biased training data.")
-    
-    parts.append("\n**Recommendations:**")
-    parts.append("• Conduct a thorough audit of the selection criteria and decision-making process")
-    parts.append("• Remove or anonymize demographic features that correlate with protected attributes")
+    if not biased_cols:
+        parts.append("The dataset appears overall fair across demographic groups.")
+
+    return "".join(parts)
     parts.append("• Apply fairness-aware machine learning techniques (reweighting, adversarial debiasing)")
     parts.append("• Implement regular bias monitoring with automated alerts")
     parts.append("• Consult with domain experts and affected communities")
@@ -332,10 +422,11 @@ def generate_rule_based_explanation(bias_results: Dict) -> str:
 # ─────────────────────────────────────────────
 
 def generate_pdf_report(audit_data: Dict) -> bytes:
-    """Generate a PDF audit report."""
+    """Generate a PDF audit report using fpdf2."""
     try:
         from fpdf import FPDF
         
+        # Use FPDF2 class
         pdf = FPDF()
         pdf.add_page()
         
@@ -368,7 +459,7 @@ def generate_pdf_report(audit_data: Dict) -> bytes:
         
         pdf.set_fill_color(r, g, b)
         pdf.set_text_color(255, 255, 255)
-        pdf.cell(60, 10, f"  {level}", fill=True, border=0)
+        pdf.cell(60, 10, f"  {level}", fill=True)
         pdf.set_text_color(0, 0, 0)
         pdf.ln(12)
         
@@ -393,7 +484,7 @@ def generate_pdf_report(audit_data: Dict) -> bytes:
             
             for group, data in analysis.get("group_counts", {}).items():
                 ratio = analysis["disparate_impact"]["ratios"].get(group, 1.0)
-                flag = " ⚠" if ratio < 0.8 else ""
+                flag = " (!)" if ratio < 0.8 else ""
                 pdf.cell(0, 6, f"    {group}: {data['selected']}/{data['total']} selected ({data['rate']*100:.1f}%)  |  DI Ratio: {ratio:.3f}{flag}", ln=True)
             
             pdf.ln(3)
@@ -406,10 +497,12 @@ def generate_pdf_report(audit_data: Dict) -> bytes:
         pdf.set_font("Helvetica", size=10)
         
         explanation = audit_data.get("ai_explanation", "No explanation available.")
-        # Strip markdown for PDF
+        # Sanitize for fpdf (remove non-latin-1)
         clean_exp = explanation.replace("**", "").replace("*", "").replace("#", "").replace("`", "")
+        # Very important: fpdf2 default fonts only support latin-1. We encode/decode to strip others.
+        safe_exp = clean_exp.encode('latin-1', 'ignore').decode('latin-1')
         
-        pdf.multi_cell(0, 6, clean_exp)
+        pdf.multi_cell(0, 6, safe_exp)
         
         # Blockchain entry
         block = audit_data.get("blockchain_block", {})
@@ -423,10 +516,11 @@ def generate_pdf_report(audit_data: Dict) -> bytes:
             pdf.cell(0, 6, f"Prev Hash: {block.get('prev_hash', 'N/A')}", ln=True)
             pdf.cell(0, 6, f"Timestamp: {block.get('timestamp', 'N/A')}", ln=True)
         
-        return pdf.output(dest='S').encode('latin-1')
+        # In fpdf2, output() returns bytes directly
+        return pdf.output()
     
     except Exception as e:
-        # Minimal fallback
+        print(f"PDF Error: {str(e)}")
         return f"PDF generation failed: {str(e)}".encode()
 
 
@@ -449,26 +543,22 @@ async def upload_csv(file: UploadFile = File(...)):
     """Upload and parse a CSV file."""
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are supported.")
-    
+
     contents = await file.read()
     try:
         df = pd.read_csv(io.BytesIO(contents))
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Failed to parse CSV: {str(e)}")
-    
-    # Basic validation
+
     if df.empty:
         raise HTTPException(status_code=422, detail="CSV file is empty.")
     if len(df.columns) < 2:
         raise HTTPException(status_code=422, detail="CSV must have at least 2 columns.")
-    
+
     demographic_cols, decision_col = detect_columns(df)
-    
-    # Replace NaN with None for JSON serialization
     df = df.where(pd.notnull(df), None)
-    
     preview_rows = df.head(20).to_dict(orient="records")
-    
+
     return {
         "filename": file.filename,
         "total_rows": len(df),
@@ -482,53 +572,84 @@ async def upload_csv(file: UploadFile = File(...)):
 
 
 @app.post("/api/analyze")
-async def analyze_csv(file: UploadFile = File(...)):
-    """Full bias analysis pipeline: parse → detect → analyze → AI explanation → blockchain."""
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Only CSV files are supported.")
-    
-    contents = await file.read()
+async def analyze_csv(
+    file: UploadFile = File(...),
+    jurisdiction: str = Form("US_EEOC"),
+    language: str = Form("English")
+):
+    """Instant bias analysis — returns results immediately without waiting for AI."""
     try:
-        df = pd.read_csv(io.BytesIO(contents))
+        if not file.filename.endswith(".csv"):
+            raise HTTPException(status_code=400, detail="Only CSV files are supported.")
+
+        contents = await file.read()
+        try:
+            df = pd.read_csv(io.BytesIO(contents))
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Failed to parse CSV: {str(e)}")
+
+        if df.empty:
+            raise HTTPException(status_code=422, detail="CSV file is empty.")
+
+        demographic_cols, decision_col = detect_columns(df)
+
+        if not decision_col:
+            raise HTTPException(status_code=422, detail="Could not detect a decision/outcome column. Ensure your CSV has a column like 'Selected', 'Approved', 'Hired', etc.")
+
+        if not demographic_cols:
+            raise HTTPException(status_code=422, detail="Could not detect demographic columns. Ensure your CSV has columns like 'Gender', 'Race', 'Age', etc.")
+
+        bias_results = analyze_bias(df, decision_col, demographic_cols, jurisdiction_key=jurisdiction)
+        jur_info = JURISDICTIONS.get(jurisdiction, JURISDICTIONS["GLOBAL_MIN"])
+
+        # Instant rule-based explanation — no Gemini network call here
+        ai_explanation = generate_rule_based_explanation(bias_results)
+
+        audit_payload = {
+            "filename": file.filename,
+            "bias_score": bias_results["overall_bias_score"],
+            "bias_level": bias_results["overall_bias_level"],
+            "decision_column": decision_col,
+            "demographic_columns": demographic_cols,
+            "total_rows": bias_results["total_rows"],
+        }
+        block = add_to_chain(audit_payload)
+
+        return {
+            "status": "success",
+            "filename": file.filename,
+            "bias_results": bias_results,
+            "ai_explanation": ai_explanation,
+            "blockchain_block": block,
+            "jurisdiction_info": jur_info["standard"],
+            "language": language,
+            "preview": df.head(20).where(pd.notnull(df.head(20)), None).to_dict(orient="records"),
+        }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Failed to parse CSV: {str(e)}")
-    
-    if df.empty:
-        raise HTTPException(status_code=422, detail="CSV file is empty.")
-    
-    demographic_cols, decision_col = detect_columns(df)
-    
-    if not decision_col:
-        raise HTTPException(status_code=422, detail="Could not detect a decision/outcome column. Please ensure your CSV has a column like 'Selected', 'Approved', 'Hired', etc.")
-    
-    if not demographic_cols:
-        raise HTTPException(status_code=422, detail="Could not detect demographic columns. Please ensure your CSV has columns like 'Gender', 'Race', 'Age', etc.")
-    
-    # Run bias analysis
-    bias_results = analyze_bias(df, decision_col, demographic_cols)
-    
-    # Get AI explanation
-    ai_explanation = await get_ai_explanation(bias_results)
-    
-    # Store in blockchain
-    audit_payload = {
-        "filename": file.filename,
-        "bias_score": bias_results["overall_bias_score"],
-        "bias_level": bias_results["overall_bias_level"],
-        "decision_column": decision_col,
-        "demographic_columns": demographic_cols,
-        "total_rows": bias_results["total_rows"],
-    }
-    block = add_to_chain(audit_payload)
-    
-    return {
-        "status": "success",
-        "filename": file.filename,
-        "bias_results": bias_results,
-        "ai_explanation": ai_explanation,
-        "blockchain_block": block,
-        "preview": df.head(20).where(pd.notnull(df.head(20)), None).to_dict(orient="records"),
-    }
+        import traceback
+        err_msg = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {err_msg}")
+
+
+@app.post("/api/explain")
+async def get_ai_explain(request: Request):
+    """Non-blocking endpoint: call AFTER results load to upgrade explanation with Gemini AI."""
+    try:
+        body = await request.json()
+        bias_results = body.get("bias_results", {})
+        jurisdiction_info = body.get("jurisdiction_info", "Global Standard")
+        language = body.get("language", "English")
+
+        explanation = await get_ai_explanation(
+            bias_results,
+            jurisdiction_info=jurisdiction_info,
+            language=language
+        )
+        return {"explanation": explanation}
+    except Exception:
+        return {"explanation": "AI explanation temporarily unavailable."}
 
 
 @app.get("/api/chain")
@@ -595,6 +716,55 @@ async def export_pdf(file: UploadFile = File(...)):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=equiai_audit_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"}
     )
+
+
+class WebhookPayload(BaseModel):
+    """Payload for real-time and CI/CD webhook integrations."""
+    decisions: List[Dict[str, Any]]
+    decision_column: str = "selected"
+    demographic_columns: List[str] = ["gender", "race"]
+    jurisdiction: str = "GLOBAL_MIN"
+
+
+@app.post("/api/webhook/evaluate")
+async def webhook_evaluate(payload: WebhookPayload):
+    """
+    Real-Time Bias Evaluation Webhook.
+    Receives JSON decisions on-the-fly and runs the fairness audit.
+    If 'overall_bias_score' drops below jurisdiction threshold, it triggers an alert.
+    """
+    if not payload.decisions:
+        raise HTTPException(status_code=400, detail="No decisions provided.")
+    
+    df = pd.DataFrame(payload.decisions)
+    
+    if payload.decision_column not in df.columns:
+        raise HTTPException(status_code=400, detail=f"Decision column '{payload.decision_column}' missing.")
+    
+    missing_demographics = [col for col in payload.demographic_columns if col not in df.columns]
+    if missing_demographics:
+        raise HTTPException(status_code=400, detail=f"Missing demographic columns: {missing_demographics}")
+        
+    bias_results = analyze_bias(df, payload.decision_column, payload.demographic_columns, jurisdiction_key=payload.jurisdiction)
+    
+    jur_info = JURISDICTIONS.get(payload.jurisdiction, JURISDICTIONS["GLOBAL_MIN"])
+    alert_triggered = bias_results["overall_bias_score"] < (jur_info["threshold"] * 100)
+    
+    block = add_to_chain({
+        "type": "webhook_eval",
+        "bias_score": bias_results["overall_bias_score"],
+        "alert": alert_triggered,
+        "records": len(df),
+        "jurisdiction": payload.jurisdiction
+    })
+    
+    return {
+        "status": "success",
+        "alert_triggered": alert_triggered,
+        "bias_results": bias_results,
+        "blockchain_hash": block["hash"]
+    }
+
 
 
 if __name__ == "__main__":
