@@ -19,16 +19,16 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          cd "Solution challenge/backend"
-          pip install -r requirements.txt
-          pip install httpx jq
+            cd backend
+            pip install -r requirements.txt
+            pip install httpx jq
 
       - name: Start EquiAI Backend
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          cd "Solution challenge/backend"
-          uvicorn main:app --host 0.0.0.0 --port 8000 &
+            cd backend
+            uvicorn main:app --host 0.0.0.0 --port 8000 &
           sleep 5  # wait for server to start
 
       - name: Fairness Gate (Bias Audit)
