@@ -24,13 +24,24 @@ load_dotenv()
 
 app = FastAPI(title="EquiAI Bias Detection API", version="1.0.0")
 
+# Security hardening: Restrict CORS origins in production
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Sanitize all unhandled exceptions to prevent information leakage."""
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred. Please contact support."}
+    )
 
 # ─────────────────────────────────────────────
 # In-memory audit log (blockchain-style chain)
@@ -628,9 +639,9 @@ async def analyze_csv(
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        err_msg = "".join(traceback.format_exception(type(e), e, e.__traceback__))
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {err_msg}")
+        # Log error internally (could use a logger here)
+        print(f"Server Error during analysis: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal analysis error. Please check your CSV format or try again later.")
 
 
 @app.post("/api/explain")
