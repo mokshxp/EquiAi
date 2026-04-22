@@ -31,7 +31,7 @@ export default function Navbar() {
       boxShadow: scrolled ? '0 1px 20px rgba(109,40,217,0.08)' : 'none',
       transition: 'all 0.3s ease'
     }}>
-      <div style={{ maxWidth: 1320, width: '100%', margin: '0 auto', padding: '0 1.75rem', display: 'flex', justifyBetween: 'space-between', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ maxWidth: 1320, width: '100%', margin: '0 auto', padding: '0 1.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
           <div style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', boxShadow: '0 4px 12px rgba(109,40,217,0.38)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 900, fontSize: 12 }}>EQ</div>
           <span style={{ fontSize: '1.18rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.04em' }}>Equi<span style={{ color: '#7c3aed' }}>AI</span></span>

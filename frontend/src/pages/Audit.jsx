@@ -432,7 +432,7 @@ export default function Audit() {
               </div>
 
               {aiExplanation && (
-                <div style={{ ...cardStyle, padding: '2rem', background: isDark ? 'rgba(255,255,255,0.02)' : '#fafafa' }}>
+                <div style={{ ...cardStyle, padding: '2rem', background: isDark ? 'rgba(255,255,255,0.02)' : '#fafafa', marginBottom: '1.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#7c3aed' }}></div>
                     <span style={{ fontSize: '0.85rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#7c3aed' }}>Legal Compliance Narrative</span>
@@ -442,6 +442,110 @@ export default function Audit() {
                   </p>
                 </div>
               )}
+
+              {/* Detailed Data Visualization */}
+              <div style={{ ...cardStyle, padding: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: '700', marginBottom: '0.25rem' }}>Group Selection Rates</h3>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Comparison of positive outcome rates across demographic categories.</p>
+                  </div>
+                  {filteredCols.length > 1 && (
+                    <select 
+                      value={selectedCol} 
+                      onChange={(e) => setSelectedCol(e.target.value)}
+                      style={{ ...inputStyle, width: 'auto', minWidth: '150px' }}
+                    >
+                      {filteredCols.map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <div style={{ height: '350px', width: '100%' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={Object.entries(results.columnAnalyses[selectedCol || filteredCols[0]]?.groupRates || {}).map(([name, groupData]) => {
+                        const rateVal = typeof groupData === 'object' && groupData !== null ? (groupData.rate ?? 0) : (typeof groupData === 'number' ? groupData : 0);
+                        return {
+                          name: name.length > 15 ? name.substring(0, 12) + '...' : name,
+                          rate: Math.round(rateVal * 100),
+                          fullName: name
+                        };
+                      })}
+                      margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#333' : '#eee'} />
+                      <XAxis 
+                        dataKey="name" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fontSize: 12, fill: 'var(--text-muted)' }}
+                        dy={10}
+                      />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fontSize: 12, fill: 'var(--text-muted)' }}
+                        unit="%"
+                      />
+                      <Tooltip 
+                        cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }}
+                        contentStyle={{ 
+                          background: 'var(--card-bg)', 
+                          border: '1px solid var(--border)', 
+                          borderRadius: '8px',
+                          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+                        }}
+                        formatter={(value) => [`${value}%`, 'Selection Rate']}
+                        labelStyle={{ fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '4px' }}
+                      />
+                      <Bar 
+                        dataKey="rate" 
+                        radius={[6, 6, 0, 0]} 
+                        barSize={40}
+                      >
+                        {Object.entries(results.columnAnalyses[selectedCol || filteredCols[0]]?.groupRates || {}).map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={index === 0 ? '#7c3aed' : '#a78bfa'} 
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                
+                <div style={{ marginTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                  {Object.entries(results.columnAnalyses[selectedCol || filteredCols[0]]?.groupRates || {}).map(([name, groupData], idx) => {
+                    // Extract rate, selected, and total with extreme prejudice for numbers
+                    const getVal = (val, key) => {
+                      if (typeof val === 'object' && val !== null) return val[key] ?? val;
+                      return val;
+                    };
+
+                    const rateVal = getVal(groupData, 'rate');
+                    const rawSelected = typeof groupData === 'object' && groupData !== null ? groupData.selected : (results.columnAnalyses[selectedCol || filteredCols[0]]?.groupCounts[name] || 0);
+                    const rawTotal = typeof groupData === 'object' && groupData !== null ? groupData.total : null;
+
+                    const selectedCount = typeof rawSelected === 'object' && rawSelected !== null ? (rawSelected.selected ?? rawSelected.rate ?? 0) : rawSelected;
+                    const totalCount = typeof rawTotal === 'object' && rawTotal !== null ? (rawTotal.total ?? rawTotal.rate ?? 0) : rawTotal;
+                    
+                    return (
+                      <div key={name} style={{ padding: '1rem', borderRadius: '8px', background: isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{name}</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: '800', color: idx === 0 ? '#7c3aed' : 'var(--text-primary)' }}>
+                          {Math.round((typeof rateVal === 'number' ? rateVal : 0) * 100)}%
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                          Selected: {typeof selectedCount === 'number' ? selectedCount : '0'} {typeof totalCount === 'number' ? `/ ${totalCount}` : ''}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </motion.section>
           )}
         </AnimatePresence>
