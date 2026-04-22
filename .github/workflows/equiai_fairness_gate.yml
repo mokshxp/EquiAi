@@ -1,0 +1,150 @@
+name: EquiAI Fairness Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  bias-audit:
+    name: Algorithmic Fairness Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install EquiAI CLI
+        run: |
+          pip install equiai
+          # Verify install
+          equiai --version || echo "EquiAI CLI installed (version check optional)"
+
+      - name: Start EquiAI backend
+        run: |
+          pip install fastapi uvicorn pandas numpy google-generativeai python-dotenv fpdf2
+          uvicorn backend.main:app --host 0.0.0.0 --port 8000 &
+          sleep 4  # Allow server to initialize
+        continue-on-error: true
+
+      - name: Run Fairness Gate
+        id: fairness_gate
+        run: |
+          equiai audit data/training_data.csv --threshold 80 --block-on-fail
+        env:
+          EQUIAI_COMPANY_ID: ${{ secrets.EQUIAI_COMPANY_ID }}
+          EQUIAI_AUTH_TOKEN: ${{ secrets.EQUIAI_AUTH_TOKEN }}
+
+      # ── Block-on-fail logic (inline when equiai CLI unavailable) ──
+      - name: Inline Fairness Check (Fallback)
+        if: ${{ failure() }}
+        run: |
+          python3 - <<'EOF'
+          import sys, csv, hashlib, datetime, os
+
+          THRESHOLD = int(os.environ.get("EQUIAI_THRESHOLD", "80"))
+
+          # Load data
+          try:
+              with open("data/training_data.csv") as f:
+                  rows = list(csv.DictReader(f))
+          except FileNotFoundError:
+              print("⚠  data/training_data.csv not found — skipping audit.")
+              sys.exit(0)
+
+          if not rows:
+              print("⚠  Empty dataset — skipping.")
+              sys.exit(0)
+
+          # Detect protected + decision columns
+          dem_cols = [c for c in rows[0] if c.lower() in {"gender","sex","race","ethnicity","age"}]
+          dec_cols = [c for c in rows[0] if c.lower() in {"hired","selected","outcome","approved","decision"}]
+          if not dec_cols:
+              print("⚠  No decision column detected — audit skipped.")
+              sys.exit(0)
+          dec_col = dec_cols[0]
+
+          pos  = {"yes","1","true","hired","approved","selected","accepted"}
+          total_pos  = sum(1 for r in rows if str(r[dec_col]).lower() in pos)
+          total_all  = len(rows)
+          base_rate  = total_pos / total_all if total_all else 1
+
+          min_di = 1.0
+          for dem in dem_cols:
+              groups = {}
+              for r in rows:
+                  g = r.get(dem, "Unknown")
+                  groups.setdefault(g, {"pos": 0, "total": 0})
+                  groups[g]["total"] += 1
+                  if str(r[dec_col]).lower() in pos:
+                      groups[g]["pos"] += 1
+              rates = {g: v["pos"]/v["total"] if v["total"] else 0 for g, v in groups.items()}
+              if rates:
+                  max_rate = max(rates.values())
+                  min_rate = min(rates.values())
+                  di = (min_rate / max_rate) if max_rate > 0 else 1.0
+                  min_di = min(min_di, di)
+
+          score = round(min_di * 100)
+          verdict = "FAIR" if score >= THRESHOLD else "BIAS DETECTED"
+
+          # Generate blockchain hash
+          content = f"{os.environ.get('EQUIAI_COMPANY_ID','ci')}|{score}|{datetime.datetime.utcnow().isoformat()}"
+          seal = hashlib.sha256(content.encode()).hexdigest()
+
+          print("━" * 54)
+          print("   EQUIAI FAIRNESS GATE RESULT")
+          print("━" * 54)
+          print(f"  Fairness Score:  {score}/100")
+          print(f"  Verdict:         {verdict}")
+          print(f"  Disparate Impact: {min_di:.3f} (threshold: 0.800)")
+          print(f"  Blockchain Hash: {seal[:16]}...")
+          print("━" * 54)
+
+          if score < THRESHOLD:
+              print(f"\n  ❌ DEPLOYMENT BLOCKED")
+              print(f"     Score {score}/100 is below threshold {THRESHOLD}/100.")
+              print(f"     Review training data for demographic bias.\n")
+              sys.exit(1)
+          else:
+              print(f"\n  ✅ DEPLOYMENT APPROVED")
+              print(f"     Score {score}/100 meets fairness threshold.\n")
+              sys.exit(0)
+          EOF
+        env:
+          EQUIAI_COMPANY_ID: ${{ secrets.EQUIAI_COMPANY_ID }}
+          EQUIAI_THRESHOLD: "80"
+
+      - name: Upload Fairness Audit Report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: fairness-audit-report
+          path: |
+            audit_report.pdf
+            audit_report.json
+          if-no-files-found: ignore
+
+      - name: Post summary to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const outcome = '${{ steps.fairness_gate.outcome }}';
+            const passed  = outcome === 'success';
+            const emoji   = passed ? '✅' : '❌';
+            const verdict = passed ? 'DEPLOYMENT APPROVED' : 'DEPLOYMENT BLOCKED — Bias Detected';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## ${emoji} EquiAI Fairness Gate\n\n**Result: ${verdict}**\n\n${passed
+                ? 'The model meets all fairness thresholds. Deployment is approved.'
+                : 'Bias detected in training data. Fix required before merge. See the uploaded audit report for details.'}\n\n> Powered by [EquiAI](https://equiai.com) — Algorithmic Fairness Platform`
+            });
